@@ -36,6 +36,10 @@ SWAP_TOTAL, SWAP_FREE = "node_memory_SwapTotal_bytes", "node_memory_SwapFree_byt
 NET = 'device!~"lo|veth.*|docker.*|br-.*|tailscale.*|flannel.*|cni.*"'
 NET_IN, NET_OUT = f"sum(rate(node_network_receive_bytes_total{{{NET}}}[1m]))", f"sum(rate(node_network_transmit_bytes_total{{{NET}}}[1m]))"
 OS_INFO, UNAME = "node_os_info", "node_uname_info"
+CPU_INFO, CORES_PHYS = "node_cpu_info", "count(count by (package, core) (node_cpu_info))"
+GHZ, BOOT = "max(node_cpu_scaling_frequency_max_hertz)", "node_boot_time_seconds"
+TEMPS, CHIPS, DMI = "node_hwmon_temp_celsius", "node_hwmon_chip_names", "node_dmi_info"
+NIC_UP, NIC_SPEED = f"node_network_up{{{NET}}}", f"node_network_speed_bytes{{{NET}}}"
 FS = 'fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|devtmpfs|fuse.*|autofs|efivarfs|cgroup.*"'
 FS_SIZE, FS_FREE = f"node_filesystem_size_bytes{{{FS}}}", f"node_filesystem_avail_bytes{{{FS}}}"
 # GPU (utkuozdemir/nvidia_gpu_exporter)
@@ -109,7 +113,8 @@ def read(prom, gpu, checks):
     """One machine's numbers. Never raises: a machine that cannot be read comes back with up False and a plain message."""
     r = {"up": False, "msg": "", "cpu": None, "temp": None, "mem": None, "mem_used": None, "mem_total": None, "disk": None, "free": None,
          "size": None, "uptime": None, "running": None, "down": None, "gpu": None, "checks": [], "cores": None, "load": None,
-         "swap_used": None, "swap_total": None, "net_in": None, "net_out": None, "os": "", "kernel": "", "mounts": None}
+         "swap_used": None, "swap_total": None, "net_in": None, "net_out": None, "os": "", "kernel": "", "mounts": None,
+         "cpu_model": "", "cores_phys": None, "ghz": None, "boot": None, "machine": "", "temps": None, "nics": None}
     try:
         cpu = query(prom, CPU)
     except HTTPError as e:
@@ -123,13 +128,15 @@ def read(prom, gpu, checks):
         return r
     r["up"] = True
     asks = {"cpu": None, "temp": TEMP, "mem": MEM, "mem_used": MEM_USED, "mem_total": MEM_TOTAL, "disk": DISK, "free": FREE, "size": SIZE, "uptime": UPTIME, "running": RUNNING, "cores": CORES,
-            "load1": LOAD[0], "load5": LOAD[1], "load15": LOAD[2], "swap_total": SWAP_TOTAL, "swap_free": SWAP_FREE, "net_in": NET_IN, "net_out": NET_OUT}
+            "load1": LOAD[0], "load5": LOAD[1], "load15": LOAD[2], "swap_total": SWAP_TOTAL, "swap_free": SWAP_FREE, "net_in": NET_IN, "net_out": NET_OUT,
+            "cores_phys": CORES_PHYS, "ghz": GHZ, "boot": BOOT}
     if gpu:
         asks.update(gpu_load=GPU_LOAD, gpu_used=GPU_USED, gpu_total=GPU_TOTAL, gpu_temp=GPU_TEMP)
     with ThreadPoolExecutor(max_workers=8) as pool:
         got = {k: pool.submit(number, prom, q) for k, q in asks.items() if q}
         gone = pool.submit(names, prom, GONE)
         fs, osr, unr = pool.submit(mounts, prom), pool.submit(series, prom, OS_INFO), pool.submit(series, prom, UNAME)
+        more = {k: pool.submit(series, prom, q) for k, q in (("cpu", CPU_INFO), ("temps", TEMPS), ("chips", CHIPS), ("dmi", DMI), ("up", NIC_UP), ("speed", NIC_SPEED))}
         ups = [pool.submit(check_url, u) for _, u in checks]
         try:
             r["cpu"] = float(cpu[0]["value"][1]) if cpu else None
@@ -142,6 +149,16 @@ def read(prom, gpu, checks):
         osl, unl = osr.result(), unr.result()
         r["os"] = (osl[0][0].get("pretty_name") or osl[0][0].get("name") or "") if osl else ""
         r["kernel"] = (unl[0][0].get("release") or "") if unl else ""
+        m = {k: f.result() for k, f in more.items()}
+        r["cpu_model"] = " ".join(((m["cpu"] or [({}, 0)])[0][0].get("model_name") or "").split())
+        chipnames = {x.get("chip"): x.get("chip_name") for x, _ in (m["chips"] or [])}
+        r["temps"] = [{"name": chipnames.get(x.get("chip")) or x.get("chip", ""), "sensor": x.get("sensor", ""), "value": v}
+                      for x, v in sorted(m["temps"] or [], key=lambda t: (t[0].get("chip", ""), t[0].get("sensor", "")))][:12] or None
+        d = (m["dmi"] or [({}, 0)])[0][0]
+        r["machine"] = " ".join(f"{d.get('system_vendor', '')} {d.get('product_name') or d.get('board_name') or ''}".split())
+        speed = {x.get("device"): v for x, v in (m["speed"] or [])}
+        r["nics"] = [{"name": x.get("device", ""), "up": v == 1, "mbit": round(speed[x.get("device")] * 8 / 1e6) if speed.get(x.get("device"), -1) > 0 else None}
+                     for x, v in sorted(m["up"] or [], key=lambda t: t[0].get("device", ""))] or None
         r["checks"] = [{"name": n, "up": f.result()} for (n, _), f in zip(checks, ups)]
     r["load"] = [r.pop(k) for k in ("load1", "load5", "load15")]
     r["load"] = r["load"] if all(v is not None for v in r["load"]) else None

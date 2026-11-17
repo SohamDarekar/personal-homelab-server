@@ -18,13 +18,19 @@ N1, N2 = "http://192.168.1.20:9090", "http://10.0.0.5:9090"
 UP = {nodes.CPU: 12.4, nodes.TEMP: 54, nodes.MEM: 41, nodes.MEM_USED: 6.4e9, nodes.MEM_TOTAL: 15.6e9, nodes.DISK: 63, nodes.FREE: 3.7e11,
       nodes.SIZE: 1e12, nodes.UPTIME: 6.2 * 86400, nodes.RUNNING: 14, nodes.GPU_LOAD: 3, nodes.GPU_USED: 412 * 2 ** 20,
       nodes.GPU_TOTAL: 4096 * 2 ** 20, nodes.GPU_TEMP: 41, nodes.CORES: 4, "node_load1": 0.4, "node_load5": 0.5, "node_load15": 0.6,
-      nodes.SWAP_TOTAL: 4e9, nodes.SWAP_FREE: 3e9, nodes.NET_IN: 1.2e6, nodes.NET_OUT: 3e5}
+      nodes.SWAP_TOTAL: 4e9, nodes.SWAP_FREE: 3e9, nodes.NET_IN: 1.2e6, nodes.NET_OUT: 3e5,
+      nodes.CORES_PHYS: 4, nodes.GHZ: 3.3e9, nodes.BOOT: 1.7e9}
 DISKS = [({"device": "/dev/nvme0n1p2", "mountpoint": "/", "fstype": "btrfs"}, 2.55e11, 1.5e11),
          ({"device": "/dev/nvme0n1p2", "mountpoint": "/home", "fstype": "btrfs"}, 2.55e11, 1.5e11),   # the same disk mounted twice
          ({"device": "/dev/sdb1", "mountpoint": "/mnt/storage", "fstype": "btrfs"}, 1e12, 7e11),
          ({"device": "/dev/sda1", "mountpoint": "/boot", "fstype": "vfat"}, 5.3e8, 4.3e8)]
 LABELLED = {nodes.OS_INFO: [({"pretty_name": "Arch Linux", "name": "Arch Linux"}, 1)], nodes.UNAME: [({"release": "7.3.4-arch1-2", "machine": "x86_64"}, 1)],
-            nodes.FS_SIZE: [(m, size) for m, size, _ in DISKS], nodes.FS_FREE: [(m, free) for m, _, free in DISKS]}
+            nodes.FS_SIZE: [(m, size) for m, size, _ in DISKS], nodes.FS_FREE: [(m, free) for m, _, free in DISKS],
+            nodes.CPU_INFO: [({"model_name": "Intel(R) Core(TM)  i5-6500T CPU @ 2.50GHz"}, 1)],
+            nodes.TEMPS: [({"chip": "platform_coretemp_0", "sensor": "temp2"}, 52), ({"chip": "platform_coretemp_0", "sensor": "temp1"}, 54)],
+            nodes.CHIPS: [({"chip": "platform_coretemp_0", "chip_name": "coretemp"}, 1)],
+            nodes.DMI: [({"system_vendor": "HP", "product_name": "EliteDesk 800 G2 DM"}, 1)],
+            nodes.NIC_UP: [({"device": "wlan0"}, 0), ({"device": "eno1"}, 1)], nodes.NIC_SPEED: [({"device": "eno1"}, 125000000), ({"device": "wlan0"}, -1)]}
 CONF = {"nodes": [{"name": "Node 2", "prom": N2}, {"name": "Node 1", "prom": N1, "primary": True, "gpu": True, "checks": [{"name": "Pi-hole", "url": "http://192.168.1.20/admin"}]}]}
 
 
@@ -192,14 +198,21 @@ class Reading(Base):
                          [("/", "nvme0n1p2", "btrfs"), ("/boot", "sda1", "vfat"), ("/mnt/storage", "sdb1", "btrfs")])
         self.assertEqual((n["mounts"][2]["size"], n["mounts"][2]["free"]), (1e12, 7e11))
 
+    def test_the_hardware_panel_detail(self):
+        n = nodes.gather(CONF)[1]
+        self.assertEqual((n["cpu_model"], n["cores_phys"], n["ghz"], n["boot"], n["machine"]), ("Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz", 4, 3.3e9, 1.7e9, "HP EliteDesk 800 G2 DM"))
+        self.assertEqual([(t["name"], t["sensor"], t["value"]) for t in n["temps"]], [("coretemp", "temp1", 54), ("coretemp", "temp2", 52)])
+        self.assertEqual(n["nics"], [{"name": "eno1", "up": True, "mbit": 1000}, {"name": "wlan0", "up": False, "mbit": None}])
+
     def test_missing_detail_is_left_out_not_an_error(self):
-        for k in (nodes.FS_SIZE, nodes.OS_INFO, nodes.UNAME):
+        for k in (nodes.FS_SIZE, nodes.OS_INFO, nodes.UNAME, nodes.CPU_INFO, nodes.TEMPS, nodes.DMI, nodes.NIC_UP):
             del self.fake.labelled[N2][k]
         for k in (nodes.CORES, "node_load1", nodes.SWAP_TOTAL):
             del self.fake.values[N2][k]
         n = nodes.gather(CONF)[1]
         self.assertTrue(n["up"])
         self.assertEqual((n["mounts"], n["os"], n["kernel"], n["cores"], n["load"], n["swap_used"]), (None, "", "", None, None, None))
+        self.assertEqual((n["cpu_model"], n["machine"], n["temps"], n["nics"]), ("", "", None, None))
 
     def test_json_route(self):
         app = self.make_app()
