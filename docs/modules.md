@@ -43,6 +43,7 @@ It has one function, `register(app)`. `app` gives you:
 - `app.llm`: the Ollama client, if you need AI.
 - `app.telegram`: send and edit messages.
 - `app.intents`: bot commands, name to function.
+- `app.text_hooks`: plain-sentence matchers. Append `fn(text, lowered)`; return True when you answered, False to let the bot carry on. They run before the classifier, so claim only sentences that are clearly yours (see `modules/nodes`).
 
 ## 4. Handle missing things politely
 

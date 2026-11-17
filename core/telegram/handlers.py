@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from core import host, intent as _intent
 from core.helpers import esc, now, t12
 
-NEEDS = ("B", "BARE_DONE", "GOAL_ADD", "HOME", "KEYBOARD", "NAME", "OWNER", "TG", "TOPIC_GENERIC", "TOPIC_WORDS", "TZ", "_lock", "achieve_goal", "add_goal", "add_note", "add_reminder", "app_buttons", "app_name", "bare_done", "chat", "cricket_items", "del_reminder", "detect_topic", "done_note", "edit", "evening", "events_for", "extras", "feed_items", "find_app", "flight_text", "flights", "full_briefing", "fx", "gmail", "goal_text", "goals_view", "host_action", "ics_text", "journal", "journal_day", "journal_save", "live_digest", "logs", "manage_notes", "manage_reminders", "med_snooze", "med_tick", "morning_briefing", "my_day", "news_search", "nice_when", "note_text", "notes_view", "past_drop", "photo", "reminders_view", "restart_app", "save", "search", "send", "server", "sg", "sg_save", "shared_location", "snooze", "sports", "state", "stored", "suggested_tags", "summarise_link", "summarise_topic", "tg", "topic_news", "typed_meds", "undo_note", "unload_ai", "update_note", "voice", "weather", "weather_data", "weekly", "world_clock")
+NEEDS = ("B", "BARE_DONE", "GOAL_ADD", "HOME", "KEYBOARD", "NAME", "OWNER", "TEXT_HOOKS", "TG", "TOPIC_GENERIC", "TOPIC_WORDS", "TZ", "_lock", "achieve_goal", "add_goal", "add_note", "add_reminder", "app_buttons", "app_name", "bare_done", "chat", "cricket_items", "del_reminder", "detect_topic", "done_note", "edit", "evening", "events_for", "extras", "feed_items", "find_app", "flight_text", "flights", "full_briefing", "fx", "gmail", "goal_text", "goals_view", "host_action", "ics_text", "journal", "journal_day", "journal_save", "live_digest", "logs", "manage_notes", "manage_reminders", "med_snooze", "med_tick", "morning_briefing", "my_day", "news_search", "nice_when", "note_text", "notes_view", "past_drop", "photo", "reminders_view", "restart_app", "save", "search", "send", "server", "sg", "sg_save", "shared_location", "snooze", "sports", "state", "stored", "suggested_tags", "summarise_link", "summarise_topic", "tg", "topic_news", "typed_meds", "undo_note", "unload_ai", "update_note", "voice", "weather", "weather_data", "weekly", "world_clock")
 
 
 def bind():
@@ -199,6 +199,8 @@ def route(text):
         intent, how = "add_note", "prefix"
     elif re.match(r"^(remind me|notify me|ping me|alert me|nudge me|wake me|set an? (reminder|alarm)|reminder:|remember to|don'?t let me forget)\b", t):
         intent, how = "add_reminder", "prefix"
+    elif any(hook(text, t) for hook in list(TEXT_HOOKS)):  # a module claimed it (the Nodes module, for example)
+        return
     else:
         try:
             intent, how = _intent.classify(text)

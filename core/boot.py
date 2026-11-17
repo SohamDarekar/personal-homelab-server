@@ -233,6 +233,7 @@ from modules.health import BARE_DONE, bare_done, check_meds, check_sg, med_snooz
 
 # ================================================================ small API for the landing page
 ROUTER = _http_api.Router(log=print)
+TEXT_HOOKS = []  # modules add plain-sentence matchers here (app.text_hooks); route() tries them before the classifier
 CAPS = _capabilities.Capabilities()
 def _ollama_check():
     ok, why = _llm.Ollama(OLLAMA).available()
@@ -297,7 +298,7 @@ _host.provide(llm_json=llm_json, nudged=nudged, edit=edit, U=U, nice_when=nice_w
               news_rows=news_rows, t12=t12, travel_fx=travel_fx, weather_data=weather_data, INDIA=INDIA, TEMP=TEMP, containers=containers, cricket_items=cricket_items, daily=daily, f1_when=f1_when, flights=flights, once=once, one=one,
               FILE_API=FILE_API, SEARX=SEARX, TOPIC_WORDS=TOPIC_WORDS, UA=UA, WHISPER=WHISPER, jolpica=jolpica, md_to_html=md_to_html, route=route, strip_tags=strip_tags,
               weather_lines=weather_lines, GMAIL_FILE=GMAIL_FILE, GMAIL_USER=GMAIL_USER, ALWAYS_ON=ALWAYS_ON, APPS=APPS, DAILY=DAILY, DOCKER=DOCKER, PROM=PROM, _ai=_ai, ai_status=ai_status, app_name=app_name, EMBED_MODEL=EMBED_MODEL, JOURNAL_MODEL=JOURNAL_MODEL, MODEL=MODEL, NEWS_MODEL=NEWS_MODEL, _run=_run, run_write=run_write, journal_work=journal_work, tg=tg, write_json=write_json)
-APP = _app.App(CONFIG, ROUTER, _scheduler.Scheduler(str(TZ)), CAPS, _store.Store(DATA), _llm.Ollama(OLLAMA), TG)
+APP = _app.App(CONFIG, ROUTER, _scheduler.Scheduler(str(TZ)), CAPS, _store.Store(DATA), _llm.Ollama(OLLAMA), TG, text_hooks=TEXT_HOOKS)
 MODULES = _registry.discover(MODULES_DIR)
 ENABLED, MODULE_NOTES = _registry.plan(MODULES, cfg("modules", None))
 STARTED = [_n for _n in ENABLED if _registry.start(MODULES[_n], APP)]
@@ -354,6 +355,7 @@ def main():
         {"command": "reminders", "description": "My reminders"},
         {"command": "weather", "description": "Weather"},
         {"command": "stats", "description": "Server health"},
+        *([{"command": "nodes", "description": "How each machine is doing"}] if "nodes" in STARTED else []),
         {"command": "suggestedtags", "description": "Journal tags the AI suggests adding"},
         {"command": "reset", "description": "Forget our chat"},
     ])
