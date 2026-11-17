@@ -31,6 +31,8 @@ SCHEMA = {
         "tiles_hidden": [str],   # built-in app and tool tiles to hide, by name
         "tiles": [{"name": str, "sub": str, "url": str, "icon": str, "group": str}],  # your own tiles (group: apps or tools)
     },
+    "nodes": [{"name": str, "prom": str, "primary": bool, "gpu": bool, "checks": [{"name": str, "url": str}]}],  # machines the Nodes module watches
+    "node_limits": {"temp": int, "disk": int, "memory": int, "fails": int},  # when the Nodes module alerts: degrees C, percent full, percent used, checks in a row
     "modules": {"*": bool},  # modules: {gym: false} switches a module off
 }
 
