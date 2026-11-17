@@ -17,7 +17,14 @@ from phrases import PHRASES
 N1, N2 = "http://192.168.1.20:9090", "http://10.0.0.5:9090"
 UP = {nodes.CPU: 12.4, nodes.TEMP: 54, nodes.MEM: 41, nodes.MEM_USED: 6.4e9, nodes.MEM_TOTAL: 15.6e9, nodes.DISK: 63, nodes.FREE: 3.7e11,
       nodes.SIZE: 1e12, nodes.UPTIME: 6.2 * 86400, nodes.RUNNING: 14, nodes.GPU_LOAD: 3, nodes.GPU_USED: 412 * 2 ** 20,
-      nodes.GPU_TOTAL: 4096 * 2 ** 20, nodes.GPU_TEMP: 41}
+      nodes.GPU_TOTAL: 4096 * 2 ** 20, nodes.GPU_TEMP: 41, nodes.CORES: 4, "node_load1": 0.4, "node_load5": 0.5, "node_load15": 0.6,
+      nodes.SWAP_TOTAL: 4e9, nodes.SWAP_FREE: 3e9, nodes.NET_IN: 1.2e6, nodes.NET_OUT: 3e5}
+DISKS = [({"device": "/dev/nvme0n1p2", "mountpoint": "/", "fstype": "btrfs"}, 2.55e11, 1.5e11),
+         ({"device": "/dev/nvme0n1p2", "mountpoint": "/home", "fstype": "btrfs"}, 2.55e11, 1.5e11),   # the same disk mounted twice
+         ({"device": "/dev/sdb1", "mountpoint": "/mnt/storage", "fstype": "btrfs"}, 1e12, 7e11),
+         ({"device": "/dev/sda1", "mountpoint": "/boot", "fstype": "vfat"}, 5.3e8, 4.3e8)]
+LABELLED = {nodes.OS_INFO: [({"pretty_name": "Arch Linux", "name": "Arch Linux"}, 1)], nodes.UNAME: [({"release": "7.3.4-arch1-2", "machine": "x86_64"}, 1)],
+            nodes.FS_SIZE: [(m, size) for m, size, _ in DISKS], nodes.FS_FREE: [(m, free) for m, _, free in DISKS]}
 CONF = {"nodes": [{"name": "Node 2", "prom": N2}, {"name": "Node 1", "prom": N1, "primary": True, "gpu": True, "checks": [{"name": "Pi-hole", "url": "http://192.168.1.20/admin"}]}]}
 
 
@@ -32,6 +39,7 @@ class Fake:
         self.modes = {N1: "up", N2: "up"}
         self.values = {N1: dict(UP), N2: {k: v for k, v in UP.items() if not k.startswith("avg(nvidia") and "nvidia" not in k}}
         self.gone = {N1: [], N2: []}
+        self.labelled = {N1: dict(LABELLED), N2: dict(LABELLED)}
         self.pages = {"http://192.168.1.20/admin": 200}
         self.calls = []
 
@@ -59,6 +67,8 @@ class Fake:
         q = parse_qs(urlparse(url).query)["query"][0]
         if q == nodes.GONE:
             return {"data": {"result": [{"metric": {"name": n}} for n in self.gone[base]]}}
+        if q in self.labelled[base]:
+            return {"data": {"result": [{"metric": m, "value": [0, str(v)]} for m, v in self.labelled[base][q]]}}
         v = self.values[base].get(q)
         return vec(v) if v is not None else {"data": {"result": []}}
 
@@ -171,6 +181,25 @@ class Reading(Base):
         self.fake.gone[N2] = ["sonarr", "radarr"]
         n = nodes.gather(CONF)[1]
         self.assertEqual(n["down"], ["radarr", "sonarr"])
+
+    def test_the_detail_the_server_page_shows(self):
+        n = nodes.gather(CONF)[0]
+        self.assertEqual((n["cores"], n["load"], n["os"], n["kernel"]), (4, [0.4, 0.5, 0.6], "Arch Linux", "7.3.4-arch1-2"))
+        self.assertEqual((n["swap_total"], n["swap_used"]), (4e9, 1e9))
+        self.assertEqual((n["net_in"], n["net_out"]), (1.2e6, 3e5))
+        # a disk mounted twice shows once (at its shortest mount point), and the list is in mount point order
+        self.assertEqual([(m["mount"], m["device"], m["fstype"]) for m in n["mounts"]],
+                         [("/", "nvme0n1p2", "btrfs"), ("/boot", "sda1", "vfat"), ("/mnt/storage", "sdb1", "btrfs")])
+        self.assertEqual((n["mounts"][2]["size"], n["mounts"][2]["free"]), (1e12, 7e11))
+
+    def test_missing_detail_is_left_out_not_an_error(self):
+        for k in (nodes.FS_SIZE, nodes.OS_INFO, nodes.UNAME):
+            del self.fake.labelled[N2][k]
+        for k in (nodes.CORES, "node_load1", nodes.SWAP_TOTAL):
+            del self.fake.values[N2][k]
+        n = nodes.gather(CONF)[1]
+        self.assertTrue(n["up"])
+        self.assertEqual((n["mounts"], n["os"], n["kernel"], n["cores"], n["load"], n["swap_used"]), (None, "", "", None, None, None))
 
     def test_json_route(self):
         app = self.make_app()

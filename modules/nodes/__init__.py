@@ -29,6 +29,15 @@ UPTIME = "time() - node_boot_time_seconds"
 RUNNING = 'count((time() - container_last_seen{name!=""}) < 120)'
 GONE = ('group by (name) (last_over_time(container_last_seen{name!=""}[1d])) '
         'unless group by (name) (container_last_seen{name!=""})')
+# More detail for the Server & Apps page
+CORES = 'count(count by (cpu) (node_cpu_seconds_total{mode="idle"}))'
+LOAD = ("node_load1", "node_load5", "node_load15")
+SWAP_TOTAL, SWAP_FREE = "node_memory_SwapTotal_bytes", "node_memory_SwapFree_bytes"
+NET = 'device!~"lo|veth.*|docker.*|br-.*|tailscale.*|flannel.*|cni.*"'
+NET_IN, NET_OUT = f"sum(rate(node_network_receive_bytes_total{{{NET}}}[1m]))", f"sum(rate(node_network_transmit_bytes_total{{{NET}}}[1m]))"
+OS_INFO, UNAME = "node_os_info", "node_uname_info"
+FS = 'fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|devtmpfs|fuse.*|autofs|efivarfs|cgroup.*"'
+FS_SIZE, FS_FREE = f"node_filesystem_size_bytes{{{FS}}}", f"node_filesystem_avail_bytes{{{FS}}}"
 # GPU (utkuozdemir/nvidia_gpu_exporter)
 GPU_LOAD = "avg(nvidia_smi_utilization_gpu_ratio) * 100"
 GPU_USED = "sum(nvidia_smi_memory_used_bytes)"
@@ -46,6 +55,32 @@ def number(base, q):
         return float(r[0]["value"][1]) if r else None
     except Exception:
         return None
+
+
+def series(base, q):
+    """Every series of a query as (labels, value), or None when the machine does not answer."""
+    try:
+        return [(r["metric"], float(r["value"][1])) for r in query(base, q)]
+    except Exception:
+        return None
+
+
+def mounts(base):
+    """One row per disk (a disk mounted twice, as btrfs does, is shown once at its shortest mount point), sorted by mount point."""
+    size, free = series(base, FS_SIZE), series(base, FS_FREE)
+    if not size:
+        return None
+    left = {(m.get("device"), m.get("mountpoint")): v for m, v in (free or [])}
+    best = {}
+    for m, v in size:
+        if v <= 0 or not m.get("mountpoint"):
+            continue
+        row = {"mount": m["mountpoint"], "device": (m.get("device") or "").rsplit("/", 1)[-1], "fstype": m.get("fstype", ""), "size": v,
+               "free": left.get((m.get("device"), m["mountpoint"]))}
+        old = best.get(m.get("device"))
+        if old is None or len(row["mount"]) < len(old["mount"]):
+            best[m.get("device")] = row
+    return sorted(best.values(), key=lambda r: r["mount"])
 
 
 def names(base, q):
@@ -73,7 +108,8 @@ FIX = "Check that its Prometheus is running and that Tailscale is up on both mac
 def read(prom, gpu, checks):
     """One machine's numbers. Never raises: a machine that cannot be read comes back with up False and a plain message."""
     r = {"up": False, "msg": "", "cpu": None, "temp": None, "mem": None, "mem_used": None, "mem_total": None, "disk": None, "free": None,
-         "size": None, "uptime": None, "running": None, "down": None, "gpu": None, "checks": []}
+         "size": None, "uptime": None, "running": None, "down": None, "gpu": None, "checks": [], "cores": None, "load": None,
+         "swap_used": None, "swap_total": None, "net_in": None, "net_out": None, "os": "", "kernel": "", "mounts": None}
     try:
         cpu = query(prom, CPU)
     except HTTPError as e:
@@ -86,12 +122,14 @@ def read(prom, gpu, checks):
         r["msg"] = f"Can't reach it. {FIX}"
         return r
     r["up"] = True
-    asks = {"cpu": None, "temp": TEMP, "mem": MEM, "mem_used": MEM_USED, "mem_total": MEM_TOTAL, "disk": DISK, "free": FREE, "size": SIZE, "uptime": UPTIME, "running": RUNNING}
+    asks = {"cpu": None, "temp": TEMP, "mem": MEM, "mem_used": MEM_USED, "mem_total": MEM_TOTAL, "disk": DISK, "free": FREE, "size": SIZE, "uptime": UPTIME, "running": RUNNING, "cores": CORES,
+            "load1": LOAD[0], "load5": LOAD[1], "load15": LOAD[2], "swap_total": SWAP_TOTAL, "swap_free": SWAP_FREE, "net_in": NET_IN, "net_out": NET_OUT}
     if gpu:
         asks.update(gpu_load=GPU_LOAD, gpu_used=GPU_USED, gpu_total=GPU_TOTAL, gpu_temp=GPU_TEMP)
     with ThreadPoolExecutor(max_workers=8) as pool:
         got = {k: pool.submit(number, prom, q) for k, q in asks.items() if q}
         gone = pool.submit(names, prom, GONE)
+        fs, osr, unr = pool.submit(mounts, prom), pool.submit(series, prom, OS_INFO), pool.submit(series, prom, UNAME)
         ups = [pool.submit(check_url, u) for _, u in checks]
         try:
             r["cpu"] = float(cpu[0]["value"][1]) if cpu else None
@@ -100,7 +138,15 @@ def read(prom, gpu, checks):
         for k, f in got.items():
             r[k] = f.result()
         r["down"] = gone.result() if r["running"] is not None else None
+        r["mounts"] = fs.result()
+        osl, unl = osr.result(), unr.result()
+        r["os"] = (osl[0][0].get("pretty_name") or osl[0][0].get("name") or "") if osl else ""
+        r["kernel"] = (unl[0][0].get("release") or "") if unl else ""
         r["checks"] = [{"name": n, "up": f.result()} for (n, _), f in zip(checks, ups)]
+    r["load"] = [r.pop(k) for k in ("load1", "load5", "load15")]
+    r["load"] = r["load"] if all(v is not None for v in r["load"]) else None
+    sw, sf = r["swap_total"], r.pop("swap_free")
+    r["swap_used"] = (sw - sf) if sw and sf is not None else None
     if gpu:
         g = {"load": r.pop("gpu_load"), "used": r.pop("gpu_used"), "total": r.pop("gpu_total"), "temp": r.pop("gpu_temp")}
         r["gpu"] = g if any(v is not None for v in g.values()) else None

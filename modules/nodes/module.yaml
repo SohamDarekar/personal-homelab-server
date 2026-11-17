@@ -1,6 +1,6 @@
 name: nodes
 title: "Nodes"
-description: "Watch more than one machine. Live numbers from each machine's Prometheus on a Nodes tab, Telegram answers about any of them, and one alert when one goes down."
+description: "Watch more than one machine. Live numbers from each machine's Prometheus on the Server & Apps page, Telegram answers about any of them, and one alert when one goes down."
 version: 0.1.0
 default: false                   # off until you add modules: {nodes: true} and a nodes: list to config.yaml
 requires: []
@@ -8,6 +8,5 @@ optional: [telegram]
 platforms: [linux, mac, wsl]
 settings: {}
 dashboard:
-  tab: { id: nodes, title: Nodes, icon: server }
   web: [view.js]
   home_cards: []

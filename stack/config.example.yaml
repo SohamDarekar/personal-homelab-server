@@ -37,7 +37,7 @@ support:                      # shown in the journal's "if it feels like too muc
   helpline_name: ""           # e.g. "988 Suicide & Crisis Lifeline"
   helpline_tel: ""            # e.g. "988". Leave empty to point to findahelpline.com
 
-# Watch more than one machine (the Nodes module). Off until you add  modules: {nodes: true}  and list your machines here.
+# Watch more than one machine (the Nodes module, shown on the Server & Apps page). Off until you add  modules: {nodes: true}  and list your machines here.
 # prom is each machine's Prometheus address (use its Tailscale or LAN address, never a public one). The first with primary: true is listed first.
 # nodes:
 #   - { name: "Node 1", prom: "http://prometheus:9090", primary: true, gpu: true, checks: [{ name: "Pi-hole", url: "http://192.168.1.20/admin" }] }
