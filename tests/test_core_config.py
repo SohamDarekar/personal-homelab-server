@@ -35,6 +35,11 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(config.check({"dashboard": {"app_ports": {"8081": 3128, "3000": 3129}}}), [])
         self.assertTrue(any("dashboard.app_ports.8081 should look like a whole number" in m for m in config.check({"dashboard": {"app_ports": {"8081": "x"}}})))
 
+    def test_a_tile_can_open_outside_the_dashboard(self):
+        tile = {"name": "Uptime", "url": "https://example.com/", "group": "apps", "outside": True}
+        self.assertEqual(config.check({"dashboard": {"tiles": [tile]}}), [])
+        self.assertTrue(any("outside" in m for m in config.check({"dashboard": {"tiles": [{**tile, "outside": "yes please"}]}})))
+
     def test_wrong_shape(self):
         self.assertTrue(config.check({"world_clock": "Paris"}))
         self.assertTrue(config.check(["a"]))
