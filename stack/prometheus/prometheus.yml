@@ -12,3 +12,7 @@ scrape_configs:
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]
+  - job_name: gpu                       # optional: the NVIDIA GPU exporter on this machine (port 9835). It shows as down when none runs.
+    static_configs:
+      - targets: ["host.docker.internal:9835"]
+        labels: { instance: homelab }
