@@ -95,10 +95,11 @@ class Workflows(unittest.TestCase):
                 if os.path.basename(f) != "release.yml":
                     self.assertNotEqual(perms.get("contents"), "write", f)
 
-    def test_images_are_multi_arch_signed_with_an_sbom_and_stay_unpushed_on_pull_requests(self):
+    def test_images_are_amd64_signed_with_an_sbom_and_stay_unpushed_on_pull_requests(self):
         text = open(os.path.join(ROOT, ".github", "workflows", "images.yml")).read()
         wf = workflow("images.yml")
-        self.assertIn("linux/amd64,linux/arm64", text)
+        self.assertIn("platforms: linux/amd64\n", text)  # this copy builds for amd64 only (both machines are amd64); the emulator for arm64 is not set up
+        self.assertNotIn("arm64", text)
         for must in ("sbom: true", "provenance:", "cosign sign --yes", "id-token: write", "type=raw,value=stable", "type=edge,branch=main"):
             self.assertIn(must, text)
         self.assertEqual({m["image"] for m in wf["jobs"]["build"]["strategy"]["matrix"]["include"]}, {"core", "web"})
