@@ -202,6 +202,7 @@ services:
       DOZZLE_NO_ANALYTICS: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dozzle-data:/data  # where Dozzle keeps its login and settings, so you can turn on a password
     ports:
       - "127.0.0.1:8888:8080"
 
@@ -287,4 +288,4 @@ volumes:
   n8n-data:
   ollama-data:
   open-webui-data:
-
+  dozzle-data:
