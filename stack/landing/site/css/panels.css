@@ -52,7 +52,7 @@
 .viewer-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
 .viewer-load { position: absolute; inset: 0; display: grid; place-items: center; color: var(--faint); font-size: var(--t-md); pointer-events: none; }
 /* Hardware specs (Server tab) */
-#server-body.settled * { animation: none !important; }
+#server-body.settled *, #nodes-body.settled * { animation: none !important; }
 .hw-head { padding: var(--pad-y) var(--pad-x); margin: 12px 0; display: flex; align-items: center; gap: var(--sp-3); animation: up .25s ease both; }
 .hw-head svg { flex: none; width: 46px; height: 46px; }
 .hw-head b { display: block; font-size: var(--t-title); font-weight: 650; letter-spacing: -.01em; }
