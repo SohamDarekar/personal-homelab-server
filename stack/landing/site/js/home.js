@@ -39,7 +39,8 @@ function clocks() {
 const CLK_ALIAS = {
   'San Francisco': 'America/Los_Angeles', Seattle: 'America/Los_Angeles', Boston: 'America/New_York', Washington: 'America/New_York', Miami: 'America/New_York', Atlanta: 'America/New_York',
   Austin: 'America/Chicago', Dallas: 'America/Chicago', Houston: 'America/Chicago', Beijing: 'Asia/Shanghai', Shenzhen: 'Asia/Shanghai', Osaka: 'Asia/Tokyo', Munich: 'Europe/Berlin',
-  Barcelona: 'Europe/Madrid', Milan: 'Europe/Rome', Geneva: 'Europe/Zurich', 'Abu Dhabi': 'Asia/Dubai', Riyadh: 'Asia/Riyadh', Manchester: 'Europe/London', Edinburgh: 'Europe/London' };
+  Barcelona: 'Europe/Madrid', Milan: 'Europe/Rome', Geneva: 'Europe/Zurich', 'Abu Dhabi': 'Asia/Dubai', Riyadh: 'Asia/Riyadh', Manchester: 'Europe/London', Edinburgh: 'Europe/London',
+  Mumbai: 'Asia/Kolkata', Delhi: 'Asia/Kolkata', 'New Delhi': 'Asia/Kolkata', Bangalore: 'Asia/Kolkata', Bengaluru: 'Asia/Kolkata', Chennai: 'Asia/Kolkata', Hyderabad: 'Asia/Kolkata', Pune: 'Asia/Kolkata', Ahmedabad: 'Asia/Kolkata' };
 let clkZones = null;
 function clkFind(q) {
   if (!clkZones) {
