@@ -31,6 +31,10 @@ class CheckTests(unittest.TestCase):
         self.assertTrue(any("news_at[2]" in m for m in p))
         self.assertTrue(any("world_clock[1].tz" in m for m in p))
 
+    def test_app_ports_map_a_tile_port_to_its_tailscale_port(self):
+        self.assertEqual(config.check({"dashboard": {"app_ports": {"8081": 3128, "3000": 3129}}}), [])
+        self.assertTrue(any("dashboard.app_ports.8081 should look like a whole number" in m for m in config.check({"dashboard": {"app_ports": {"8081": "x"}}})))
+
     def test_wrong_shape(self):
         self.assertTrue(config.check({"world_clock": "Paris"}))
         self.assertTrue(config.check(["a"]))

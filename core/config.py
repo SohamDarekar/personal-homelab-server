@@ -30,6 +30,7 @@ SCHEMA = {
         "home_hidden": [str],    # home cards to hide, by card id
         "tiles_hidden": [str],   # built-in app and tool tiles to hide, by name
         "tiles": [{"name": str, "sub": str, "url": str, "icon": str, "group": str}],  # your own tiles (group: apps or tools)
+        "app_ports": {"*": int},  # a tile's port on this machine -> the https port Tailscale serves it on, e.g. "8081": 3128, so tiles open from your laptop
     },
     "nodes": [{"name": str, "prom": str, "primary": bool, "gpu": bool, "checks": [{"name": str, "url": str}]}],  # machines the Nodes module watches
     "node_limits": {"temp": int, "disk": int, "memory": int, "fails": int},  # when the Nodes module alerts: degrees C, percent full, percent used, checks in a row

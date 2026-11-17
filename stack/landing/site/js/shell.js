@@ -48,7 +48,8 @@ function confirmSheet({ title, text = '', ok = 'OK', no = 'Cancel', danger = fal
   });
 }
 const HOST = location.hostname;
-const appURL = (port, path = '') => `http://${HOST}:${port}${path}`;
+// An app's address. dashboard.app_ports (settings) maps a tile's port to the https port Tailscale serves it on, so tiles also open from other devices.
+const appURL = (port, path = '') => { const p = (typeof CFG !== 'undefined' && CFG.layout?.app_ports || {})[port]; return p ? `https://${HOST}:${p}${path}` : `http://${HOST}:${port}${path}`; };
 const STANDALONE = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let X = {};  // from the assistant: location, agenda, reminders, FX
